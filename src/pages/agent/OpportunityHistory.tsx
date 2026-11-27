@@ -14,6 +14,7 @@ export default function OpportunityHistory({ activities, stages }: { activities:
     const to = stages.find(stage => stage.id === activity.toStageId)?.name
     return <li key={activity.id} className="min-w-0 wrap-anywhere rounded-sm border border-line p-3">
       <span className="font-semibold">{activity.type === 'Stage Change' && from && to ? `${from} → ${to}` : `${activity.type} · ${activity.subject}`}</span>
+      {activity.type === 'Stage Change' && from && to && <p className="mt-1">{activity.subject}</p>}
       {description && <p className="mt-1 whitespace-pre-wrap">{description}</p>}
       <span className="mt-1 block text-[12px] text-ink-soft">{activity.completedAt ? 'Completed' : 'Scheduled'} · {new Date(activityTime(activity)).toLocaleString()}</span>
       {activity.isSystemGenerated && <span className="block text-[12px] text-ink-soft">Generated history · Responsible Agent #{activity.userId} · Initiated by User #{activity.createdById}</span>}

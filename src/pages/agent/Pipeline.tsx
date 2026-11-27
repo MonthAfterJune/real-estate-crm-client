@@ -55,6 +55,7 @@ export default function AgentPipeline() {
   const [outcomeForm, setOutcomeForm] = useState<{ id: number; kind: 'won' | 'lost' } | null>(null)
   const [editingRate, setEditingRate] = useState<number | null>(null)
   const [finalPriceError, setFinalPriceError] = useState('')
+  const [reopening, setReopening] = useState<number | null>(null)
   const savingRef = useRef(false)
   const selected = deals.find(deal => deal.id === selectedId)
   const buyers = contacts.filter(contact => contact.type === 'Buyer' || contact.type === 'Both')
@@ -102,6 +103,7 @@ export default function AgentPipeline() {
       setEditingOffer(current => open(current) ? current : null)
       setEditingRate(current => open(current) ? current : null)
       setOutcomeForm(current => current && open(current.id) ? current : null)
+      setReopening(current => open(current) ? null : current)
     } catch {
       setRefreshError('Your change was saved, but the latest workflow details could not be refreshed.')
     }
@@ -174,6 +176,19 @@ export default function AgentPipeline() {
     })
   }
 
+  function reopenOpportunity(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (!selected || !manager) return
+    const reason = String(new FormData(event.currentTarget).get('reason')).trim()
+    if (!reason) { setError('Enter a reopening reason.'); return }
+    void mutate(async () => {
+      const row = await opportunitiesService.reopen(selected.id, { reason })
+      setDeals(current => current.map(existing => existing.id === row.id ? row : existing))
+      setReopening(null); setOutcomeForm(null); setViewingPrompt(null); setEditingOffer(null); setEditingRate(null); setFinalPriceError('')
+      await refreshWorkflow()
+    })
+  }
+
   function addActivity(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (!selected || !user || manager) return
@@ -233,6 +248,7 @@ export default function AgentPipeline() {
           <p className="mb-2 text-[13px]">Commission rate (decimal): {selected.commissionRate}</p>
           <p className="mb-3 text-[13px]">Commission earned: {selected.status === 'Won' && selected.commissionAmount != null ? money.format(selected.commissionAmount) : '—'}</p>
           {selected.status !== 'Open' && <div className="mb-4 space-y-2 text-[13px]"><p>Closed at: {selected.closedAt ? new Date(selected.closedAt).toLocaleString() : 'Unavailable'}</p>{selected.status === 'Won' ? <p>Final price: {selected.finalPrice == null ? 'Unavailable' : money.format(selected.finalPrice)}</p> : <p>Lost reason: {selected.lostReason ?? 'Unavailable'}</p>}</div>}
+          {manager && selected.status !== 'Open' && <div className="mb-5">{reopening === selected.id ? <form key={`reopen-${selected.id}`} onSubmit={reopenOpportunity} className="space-y-3 rounded-sm border border-line p-3"><label className={label}>Reopening reason<textarea name="reason" required maxLength={2000} disabled={saving} className={field} /></label><div className="flex flex-wrap gap-2"><button disabled={saving} className={`${button} border-secondary bg-secondary text-on-secondary`}>Confirm reopen</button><button type="button" disabled={saving} onClick={() => setReopening(null)} className={`${button} border-line`}>Cancel reopening</button></div></form> : <button type="button" disabled={saving} onClick={() => { setReopening(selected.id); setError('') }} className={`${button} border-line text-secondary`}>Reopen opportunity</button>}</div>}
           {selected.status === 'Open' && <div className="mb-5 space-y-3">
             <div className="flex flex-wrap gap-2">
               {(selected.stage?.code ?? stages.find(stage => stage.id === selected.stageId)?.code) === 'CLOSING' && selected.property?.status === 'Reserved' && <button type="button" disabled={saving} onClick={() => { setOutcomeForm({ id: selected.id, kind: 'won' }); setError(''); setFinalPriceError('') }} className={`${button} border-secondary text-secondary`}>Mark as Won</button>}

@@ -1,7 +1,7 @@
 import { createCrudService } from '../http/createCrudService'
 import { apiRequest } from '../http/apiClient'
 import type { RequestOptions } from '../http/apiClient'
-import type { OpportunityCommissionRateRequest, OpportunityCreateRequest, OpportunityLostRequest, OpportunityResponse, OpportunityUpdateRequest, OpportunityWonRequest } from './types'
+import type { OpportunityCommissionRateRequest, OpportunityCreateRequest, OpportunityLostRequest, OpportunityReopenRequest, OpportunityResponse, OpportunityUpdateRequest, OpportunityWonRequest } from './types'
 
 const crud = createCrudService<
   OpportunityResponse,
@@ -17,4 +17,6 @@ export const opportunitiesService = {
     apiRequest<OpportunityResponse>(`/api/Opportunities/${id}/lost`, { ...options, method: 'POST', body: request }),
   setCommissionRate: (id: number, request: OpportunityCommissionRateRequest, options?: RequestOptions) =>
     apiRequest<OpportunityResponse>(`/api/Opportunities/${id}/commission-rate`, { ...options, method: 'PUT', body: request }),
+  reopen: (id: number, request: OpportunityReopenRequest, options?: RequestOptions) =>
+    apiRequest<OpportunityResponse>(`/api/Opportunities/${id}/reopen`, { ...options, method: 'POST', body: request }),
 }

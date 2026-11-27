@@ -10,6 +10,7 @@ export type OpportunityUpdateRequest = OpportunityCreateRequest & { agentId: num
 export type OpportunityWonRequest = { finalPrice: number }
 export type OpportunityLostRequest = { lostReason: string }
 export type OpportunityCommissionRateRequest = { commissionRate: number }
+export type OpportunityReopenRequest = { reason: string }
 
 export type OpportunityBuyerContactResponse = {
   id: number

@@ -224,7 +224,7 @@ export default function AgentListings() {
                   <td className="px-4.5 py-3"><StatusPill status={listing.status} /></td>
                   <td className="px-4.5 py-3">{(isStaffManager(user?.role) || listing.source.listingAgentId === user?.id) && ['Draft', 'Available', 'Withdrawn'].includes(listing.source.status)
                     ? <button type="button" aria-label={`Edit ${listing.property}`} onClick={() => setEditingProperty(listing.source)} className="cursor-pointer border-0 bg-transparent p-0 text-secondary underline">Edit</button>
-                    : <span className="text-[12px] text-ink-soft">Read-only</span>}</td>
+                    : <span className="text-[12px] text-ink-soft">{listing.source.status === 'Reserved' ? 'Release the reservation before withdrawing.' : 'Read-only'}</span>}</td>
                 </tr>
               ))}
             </tbody>
