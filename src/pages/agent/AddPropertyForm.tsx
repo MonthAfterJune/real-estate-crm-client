@@ -69,7 +69,9 @@ export default function AddPropertyForm({ property, onCancel, onSave }: {
     if (savingRef.current || (!selectedSeller && !retainedSeller) || !selectedAgent) return
     const submitter = (event.nativeEvent as SubmitEvent).submitter
     const publishing = submitter instanceof HTMLButtonElement && submitter.value === 'publish'
-    const nextStatus = (publishing ? 'Available' : status) as PropertyStatus
+    const withdrawing = submitter instanceof HTMLButtonElement && submitter.value === 'withdraw'
+    if (withdrawing && (!property || !['Draft', 'Available'].includes(status))) return
+    const nextStatus = (withdrawing ? 'Withdrawn' : publishing ? 'Available' : status) as PropertyStatus
     if (nextStatus === 'Available' && !(price !== '' && Number(price) > 0)) { setSaveError('Enter a price greater than zero before publishing.'); return }
     savingRef.current = true
     setSaving(true)
@@ -94,7 +96,8 @@ export default function AddPropertyForm({ property, onCancel, onSave }: {
       <div><h1 className="font-display text-[26px] text-ink">{property ? 'Edit property' : 'Add a property'}</h1><p className="mt-1 text-[13px] text-ink-soft">Save a Draft, then publish it when the price and listing details are ready.</p></div>
       <div className="flex flex-wrap gap-2"><button type="button" onClick={onCancel} disabled={saving} className={`${button} border-line bg-surface text-secondary`}>Cancel</button>
         <button type="submit" disabled={saving || loading || !!loadError || (!selectedSeller && !retainedSeller) || !selectedAgent} className={`${button} border-secondary bg-secondary text-on-secondary`}>{saving ? 'Saving…' : !property || status === 'Draft' ? 'Save draft' : 'Save changes'}</button>
-        {property && (status === 'Draft' || status === 'Withdrawn') && <button type="submit" value="publish" disabled={saving || loading || !!loadError || (!selectedSeller && !retainedSeller) || !selectedAgent} className={`${button} border-secondary bg-secondary text-on-secondary`}>Publish listing</button>}</div>
+        {property && (status === 'Draft' || status === 'Withdrawn') && <button type="submit" value="publish" disabled={saving || loading || !!loadError || (!selectedSeller && !retainedSeller) || !selectedAgent} className={`${button} border-secondary bg-secondary text-on-secondary`}>Publish listing</button>}
+        {property && (status === 'Draft' || status === 'Available') && <button type="submit" value="withdraw" disabled={saving || loading || !!loadError || (!selectedSeller && !retainedSeller) || !selectedAgent} className={`${button} border-line bg-surface text-secondary`}>Withdraw listing</button>}</div>
     </div>
     {saveError && <p role="alert" className="mb-4 text-[13px] text-brick">{saveError}</p>}
     {loadError && <p role="alert" className="mb-4 text-[13px] text-brick">{loadError}</p>}
