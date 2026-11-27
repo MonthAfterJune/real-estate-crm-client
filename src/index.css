@@ -1,0 +1,118 @@
+@layer theme, base, components, utilities;
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/utilities.css" layer(utilities);
+
+/* Preserve browser defaults; Tailwind Preflight is intentionally omitted. */
+/* Match the original pixel spacing and inclusive 900px breakpoint. */
+@custom-variant compact (@media (max-width: 900px));
+
+@theme {
+  --spacing: 4px;
+  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-display: "Fraunces", serif;
+  --font-heading: system-ui, "Segoe UI", Roboto, sans-serif;
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --shadow-panel: 0 2px 12px rgb(68 65 112 / 5%);
+}
+
+@theme inline {
+  --color-paper: var(--paper);
+  --color-surface: var(--surface);
+  --color-surface-muted: var(--surface-muted);
+  --color-ink: var(--ink);
+  --color-ink-soft: var(--ink-soft);
+  --color-ink-faint: var(--ink-faint);
+  --color-line: var(--line);
+  --color-line-soft: var(--line-soft);
+  --color-primary: var(--primary);
+  --color-on-primary: var(--on-primary);
+  --color-secondary: var(--secondary);
+  --color-on-secondary: var(--on-secondary);
+  --color-forest: var(--forest);
+  --color-forest-dim: var(--forest-dim);
+  --color-brass: var(--brass);
+  --color-brass-dim: var(--brass-dim);
+  --color-brick: var(--brick);
+  --color-brick-dim: var(--brick-dim);
+  --color-sky: var(--sky);
+  --color-sky-dim: var(--sky-dim);
+}
+
+@layer base {
+  :root {
+    --primary: #cbc4ff;
+    --secondary: #444170;
+    --paper: #f7f5fc;
+    --ink: #10292a;
+    --surface: #ffffff;
+    --surface-muted: #f8f6fc;
+    --on-primary: var(--ink);
+    --on-secondary: var(--surface);
+    --ink-soft: #556263;
+    --ink-faint: #5d696a;
+    --line: #e4deed;
+    --line-soft: #f0ebf6;
+    /* Legacy semantic utilities supply distinct, readable status colors. */
+    --forest: #2c6655;
+    --forest-dim: #eaf5ee;
+    --brass: #826018;
+    --brass-dim: #fff5dd;
+    --brick: #9b454c;
+    --brick-dim: #fff0f1;
+    --sky: var(--secondary);
+    --sky-dim: #eeebff;
+    --heading-ink: var(--ink);
+
+    font: 18px/145% var(--font-heading);
+    letter-spacing: 0.18px;
+    color-scheme: light;
+    background: var(--paper);
+    accent-color: var(--secondary);
+    font-synthesis: none;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  @media (max-width: 1024px) {
+    :root { font-size: 16px; }
+  }
+
+  * { box-sizing: border-box; }
+  html { scroll-padding-top: env(safe-area-inset-top, 0px); }
+  :focus-visible { outline-color: var(--secondary); }
+  ::selection { background: var(--primary); color: var(--on-primary); }
+
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--font-sans);
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  #root {
+    width: 100%;
+    margin: 0;
+    text-align: center;
+    min-height: 100svh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  h1, h2 {
+    font-family: var(--font-heading);
+    font-weight: 500;
+    color: var(--heading-ink);
+  }
+
+  h2 {
+    line-height: 118%;
+    letter-spacing: -0.24px;
+  }
+
+  p { margin: 0; }
+}

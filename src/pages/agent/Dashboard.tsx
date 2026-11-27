@@ -1,0 +1,58 @@
+﻿import { useEffect, useState } from 'react'
+import { Link } from 'react-router'
+import { useAuth } from '../../auth/useAuth'
+import Panel from '../../components/Panel'
+import StatCard from '../../components/StatCard'
+import StatusPill from '../../components/StatusPill'
+import { activitiesService, contactName, contactsService, opportunitiesService, propertiesService } from '../../services'
+import type { ActivityResponse, ContactResponse, OpportunityResponse, PropertyResponse } from '../../services'
+import { activityTime } from './workflowHelpers'
+
+const money = new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP', maximumFractionDigits: 0 })
+
+export default function AgentDashboard() {
+  const { user } = useAuth()
+  const [contacts, setContacts] = useState<ContactResponse[]>([])
+  const [properties, setProperties] = useState<PropertyResponse[]>([])
+  const [deals, setDeals] = useState<OpportunityResponse[]>([])
+  const [activities, setActivities] = useState<ActivityResponse[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [retry, setRetry] = useState(0)
+  useEffect(() => {
+    const controller = new AbortController()
+    const options = { signal: controller.signal }
+    Promise.all([contactsService.getAll(options), propertiesService.getAll(options), opportunitiesService.getAll(options), activitiesService.getAll(options)])
+      .then(([contactRows, propertyRows, dealRows, activityRows]) => {
+        if (controller.signal.aborted) return
+        setContacts(contactRows); setProperties(propertyRows); setDeals(dealRows)
+        setActivities(activityRows.sort((a, b) => activityTime(b).localeCompare(activityTime(a))))
+      }).catch((failure: unknown) => { if (!controller.signal.aborted) setError(failure instanceof Error ? failure.message : 'Unable to load dashboard.') })
+      .finally(() => { if (!controller.signal.aborted) setLoading(false) })
+    return () => controller.abort()
+  }, [retry])
+  return <div className="text-left">
+    <div className="mb-6 flex flex-wrap items-end justify-between gap-4"><div><h1 className="font-display text-[26px]">Welcome back, {user?.fullName}</h1><p className="mt-1 text-[13px] text-ink-soft">A view of your CRM workspace's contacts, listings, and opportunities.</p></div><Link to="/agent/contacts?new=Buyer" className="rounded-sm bg-secondary px-4 py-2.5 text-[13px] font-semibold text-on-secondary no-underline">New contact</Link></div>
+    {loading && <p role="status" className="mb-4 text-[13px] text-ink-soft">Loading your workspace…</p>}
+    {error && <p role="alert" className="mb-4 text-[13px] text-brick">{error} <button type="button" className="cursor-pointer border-0 bg-transparent p-0 font-sans text-secondary underline" onClick={() => { setLoading(true); setError(''); setRetry(value => value + 1) }}>Retry</button></p>}
+    {!loading && !error && <>
+      <div className="mb-6 grid grid-cols-4 gap-4 compact:grid-cols-2">{[
+        ['Contacts', String(contacts.length)], ['Available listings', String(properties.filter(property => property.status === 'Available').length)],
+        ['Open opportunities', String(deals.filter(deal => deal.status === 'Open').length)], ['Total open offer value', money.format(deals.filter(deal => deal.status === 'Open').reduce((sum, deal) => sum + (deal.offerAmount ?? 0), 0))],
+      ].map(([label, value]) => <StatCard key={label} label={label} value={value} />)}</div>
+      <div className="mb-6 grid grid-cols-2 gap-5 compact:grid-cols-1">
+        <Panel title="Contact overview"><div className="space-y-4 p-5">{['Buyer', 'Seller', 'Both'].map(type => {
+          const count = contacts.filter(contact => contact.type === type).length
+          return <div key={type}><div className="mb-2 flex justify-between text-[13px]"><span>{type === 'Both' ? 'Buyer and seller' : `${type}s`}</span><span className="font-semibold">{count}</span></div><div className="h-2 rounded-full bg-paper"><div className="h-full rounded-full bg-primary" style={{ width: `${contacts.length ? count / contacts.length * 100 : 0}%` }} /></div></div>
+        })}<Link to="/agent/contacts" className="inline-block text-[13px] text-secondary underline">Manage contacts</Link></div></Panel>
+        <Panel title="Recent activities"><div className="space-y-4 p-5">{activities.slice(0, 5).map(activity => {
+          const contact = contacts.find(row => row.id === activity.contactId)
+          const deal = deals.find(row => row.id === activity.opportunityId)
+          return <div key={activity.id} className="border-b border-line-soft pb-3 text-[13px]"><p className="font-semibold">{activity.type} · {activity.subject}</p><p className="mt-1 text-ink-soft">{contact ? contactName(contact) : `Contact #${activity.contactId}`} {deal?.property?.address}</p><time className="text-[12px] text-ink-soft" dateTime={activityTime(activity)}>{activity.completedAt ? 'Completed' : 'Scheduled'} · {new Date(activityTime(activity)).toLocaleString()}</time></div>
+        })}{!activities.length && <p className="text-[13px] text-ink-soft">No activities logged yet.</p>}<Link to="/agent/pipeline" className="inline-block text-[13px] text-secondary underline">Open pipeline</Link></div></Panel>
+      </div>
+      <Panel title="Property listings"><div className="overflow-x-auto"><table className="w-full min-w-[600px] text-left text-[13px]"><thead className="border-b border-line-soft text-ink-soft"><tr>{['Address', 'Seller', 'Price', 'Status'].map(title => <th key={title} className="px-5 py-3 font-medium" scope="col">{title}</th>)}</tr></thead><tbody>{properties.slice().sort((a, b) => b.id - a.id).slice(0, 5).map(property => <tr key={property.id} className="border-b border-line-soft last:border-0"><th scope="row" className="px-5 py-3 font-medium">{property.address}</th><td className="px-5 py-3">{property.sellerContact ? contactName(property.sellerContact) : `Contact #${property.sellerContactId}`}</td><td className="px-5 py-3 whitespace-nowrap">{property.price == null ? 'Not set' : money.format(property.price)}</td><td className="px-5 py-3"><StatusPill status={property.status.toLowerCase() as 'draft' | 'available' | 'reserved' | 'sold' | 'withdrawn'} /></td></tr>)}</tbody></table></div>{!properties.length && <p className="p-5 text-[13px] text-ink-soft">No property listings yet.</p>}<Link to="/agent/listings" className="m-5 inline-block text-[13px] text-secondary underline">Manage listings</Link></Panel>
+    </>}
+  </div>
+}
+
