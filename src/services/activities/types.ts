@@ -19,3 +19,11 @@ export type ActivityResponse = ActivityCreateRequest & {
   createdAt: string
   updatedAt: string | null
 }
+
+export type ActivityFollowUpResponse = {
+  asOfUtc: string
+  contactFollowUps: { contactId: number; lastCompletedActivityAt: string | null; referenceAt: string; inactivitySuggested: boolean }[]
+  opportunityFollowUps: { opportunityId: number; lastCompletedActivityAt: string | null; referenceAt: string; isStale: boolean }[]
+  overdueActivities: ActivityResponse[]
+  upcomingActivities: ActivityResponse[]
+}

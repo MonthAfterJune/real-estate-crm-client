@@ -3,8 +3,8 @@ import type { FormEvent } from 'react'
 import { Link, useSearchParams } from 'react-router'
 import { useAuth } from '../../auth/useAuth'
 import Panel from '../../components/Panel'
-import { contactName, contactsService } from '../../services'
-import type { ContactCreateRequest, ContactResponse, ContactType, ContactSource } from '../../services'
+import { activitiesService, contactName, contactsService } from '../../services'
+import type { ActivityFollowUpResponse, ContactCreateRequest, ContactResponse, ContactType, ContactSource } from '../../services'
 import { assignedAgentsService } from '../../services/users/assignedAgentsService'
 import type { AssignedAgent } from '../../services/users/assignedAgentsService'
 import { isStaffManager } from '../../routes/roles'
@@ -32,17 +32,38 @@ export default function Contacts() {
   const [saveError, setSaveError] = useState('')
   const [duplicateId, setDuplicateId] = useState<number | null>(null)
   const [activityContact, setActivityContact] = useState<ContactResponse | null>(null)
+  const [followUp, setFollowUp] = useState<ActivityFollowUpResponse | null>(null)
+  const [confirmInactive, setConfirmInactive] = useState<number | null>(null)
+  const [followUpError, setFollowUpError] = useState('')
+  const [inactiveError, setInactiveError] = useState('')
   const savingRef = useRef(false)
   const newType = params.get('new') === 'Seller' ? 'Seller' : params.get('new') === 'Both' ? 'Both' : 'Buyer'
 
   useEffect(() => {
     const controller = new AbortController()
-    Promise.all([contactsService.getAll({ signal: controller.signal }), assignedAgentsService.getAll({ signal: controller.signal })])
-      .then(([rows, users]) => { if (!controller.signal.aborted) { setContacts(rows); setOwners(users) } })
+    Promise.all([contactsService.getAll({ signal: controller.signal }), assignedAgentsService.getAll({ signal: controller.signal }), activitiesService.followUp({ signal: controller.signal })])
+      .then(([rows, users, snapshot]) => { if (!controller.signal.aborted) { setContacts(rows); setOwners(users); setFollowUp(snapshot) } })
       .catch((error: unknown) => { if (!controller.signal.aborted) setLoadError(error instanceof Error ? error.message : 'Unable to load contacts.') })
       .finally(() => { if (!controller.signal.aborted) setLoading(false) })
     return () => controller.abort()
   }, [retry])
+
+  async function refreshFollowUp() {
+    try { const [rows, snapshot] = await Promise.all([contactsService.getAll(), activitiesService.followUp()]); setContacts(rows); setFollowUp(snapshot); setFollowUpError('') }
+    catch { setFollowUpError('Your change was saved, but the latest follow-up details could not be refreshed.') }
+  }
+  async function markInactive(id: number) {
+    if (savingRef.current) return
+    savingRef.current = true; setSaving(true); setInactiveError('')
+    try {
+      const fresh = await contactsService.getById(id)
+      if (fresh.ownerId !== user?.id) { setInactiveError('The contact owner changed. Reload before confirming inactivity.'); return }
+      const row = await contactsService.update(id, { firstName: fresh.firstName, lastName: fresh.lastName, type: fresh.type as ContactType,
+        source: fresh.source as ContactSource, email: fresh.email, phone: fresh.phone, ownerId: fresh.ownerId, isManuallyInactive: true })
+      setContacts(items => items.map(item => item.id === row.id ? row : item)); setConfirmInactive(null); await refreshFollowUp()
+    } catch (failure) { setInactiveError(workflowError(failure, 'Unable to mark contact inactive.')) }
+    finally { savingRef.current = false; setSaving(false) }
+  }
 
   function closeForm() { setEditing(null); setCreating(false); setSaveError(''); setDuplicateId(null); setParams({}) }
   async function openDuplicate() {
@@ -73,6 +94,7 @@ export default function Contacts() {
       const row = editing ? await contactsService.update(editing.id, { ...payload, ownerId: manager ? Number(data.get('ownerId')) : editing.ownerId, isManuallyInactive: payload.isManuallyInactive ?? false }) : await contactsService.create(payload)
       setContacts(current => [row, ...current.filter(contact => contact.id !== row.id)])
       closeForm()
+      await refreshFollowUp()
     } catch (error) {
       setSaveError(workflowError(error, 'Unable to save contact.'))
       setDuplicateId(existingContactId(error))
@@ -87,6 +109,9 @@ export default function Contacts() {
       <div className="flex gap-2"><Link to="/agent/listings" className={`${button} border-line bg-surface text-secondary no-underline`}>Go to listings</Link><button type="button" disabled={loading || !!loadError || saving} onClick={() => { setCreating(true); setEditing(null); setSaveError(''); setDuplicateId(null) }} className={`${button} border-secondary bg-secondary text-on-secondary`}>New contact</button></div></div>
     {loading && <p role="status" className="mb-4 text-[13px] text-ink-soft">Loading contacts…</p>}
     {loadError && <p role="alert" className="mb-4 text-[13px] text-brick">{loadError} <button type="button" className="cursor-pointer border-0 bg-transparent p-0 font-sans text-secondary underline" onClick={() => { setLoadError(''); setLoading(true); setRetry(value => value + 1) }}>Retry</button></p>}
+    {inactiveError && <p role="alert" className="mb-4 text-[13px] text-brick">{inactiveError}</p>}
+    {followUpError && <p role="status" className="mb-4 text-[13px]">{followUpError} <button type="button" disabled={saving} onClick={() => { void refreshFollowUp() }} className="text-secondary underline">Refresh</button></p>}
+    {followUp?.contactFollowUps.filter(item => item.inactivitySuggested).map(item => { const contact = contacts.find(row => row.id === item.contactId && row.ownerId === user?.id && !row.isManuallyInactive); return contact && <div key={contact.id} className="mb-4 rounded-sm border border-line p-4 text-[13px]"><p>{contactName(contact)} · No completed activity in 90 days</p>{confirmInactive === contact.id ? <div className="mt-2 flex flex-wrap gap-3"><button type="button" disabled={saving} onClick={() => { void markInactive(contact.id) }} className="text-secondary underline">Confirm inactive</button><button type="button" disabled={saving} onClick={() => setConfirmInactive(null)} className="text-secondary underline">Keep active</button></div> : <button type="button" disabled={saving} onClick={() => setConfirmInactive(contact.id)} className="mt-2 text-secondary underline">Mark inactive</button>}</div> })}
     {!loading && !loadError && (creating || editing) && <div className="mb-5"><Panel title={editing ? 'Edit contact' : 'New contact'}>
       <form key={editing?.id ?? newType} onSubmit={save} className="space-y-4 p-5" aria-busy={saving}>
         <fieldset disabled={saving || loading || !!loadError} className="grid min-w-0 grid-cols-2 gap-4 border-0 p-0 compact:grid-cols-1">
@@ -109,7 +134,7 @@ export default function Contacts() {
       <div className="overflow-x-auto"><table className="w-full min-w-[700px] text-left text-[13px]"><thead className="border-b border-line-soft text-ink-soft"><tr>{['Contact', 'Type', 'Status', 'Source', 'Owner', 'Actions'].map(title => <th key={title} scope="col" className="px-4 py-3 font-medium">{title}</th>)}</tr></thead><tbody>{visible.map(contact => <tr key={contact.id} className="border-b border-line-soft last:border-0 hover:bg-paper"><th scope="row" className="px-4 py-3 font-medium">{contactName(contact)}<span className="block text-[12px] font-normal text-ink-soft">{contact.email ?? contact.phone}</span></th><td className="px-4 py-3">{contact.type}</td><td className="px-4 py-3">{contact.status}</td><td className="px-4 py-3">{contact.source}</td><td className="px-4 py-3">{contact.owner?.fullName ?? '—'}</td><td className="px-4 py-3"><div className="flex flex-wrap gap-3"><button type="button" aria-label={`Edit ${contactName(contact)}`} disabled={saving} onClick={() => { setEditing(contact); setCreating(false); setSaveError(''); setDuplicateId(null) }} className="cursor-pointer border-0 bg-transparent p-0 font-sans text-secondary underline">Edit</button><button type="button" aria-label={`Activities ${contactName(contact)}`} disabled={saving} onClick={() => setActivityContact(contact)} className="cursor-pointer border-0 bg-transparent p-0 font-sans text-secondary underline">Activities</button></div></td></tr>)}</tbody></table></div>
       {!loading && !loadError && visible.length === 0 && <p className="p-8 text-center text-[13px] text-ink-soft">{contacts.length ? 'No contacts match your search.' : 'Create your first contact to get started.'}</p>}
     </Panel>
-    {activityContact && <div className="mt-5"><ContactActivities key={activityContact.id} contact={activityContact} agents={owners} onClose={() => setActivityContact(null)} /></div>}
+    {activityContact && <div className="mt-5"><ContactActivities key={activityContact.id} contact={activityContact} agents={owners} onClose={() => setActivityContact(null)} onChanged={refreshFollowUp} /></div>}
   </div>
 }
 
