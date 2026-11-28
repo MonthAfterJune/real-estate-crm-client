@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
-import { Link } from 'react-router'
+import { Link, useSearchParams } from 'react-router'
 import Panel from '../../components/Panel'
 import { useAuth } from '../../auth/useAuth'
 import { activitiesService, contactName, contactsService, notesService, opportunitiesService, pipelineStagesService, propertiesService } from '../../services'
@@ -9,7 +9,7 @@ import { assignedAgentsService } from '../../services/users/assignedAgentsServic
 import type { AssignedAgent } from '../../services/users/assignedAgentsService'
 import { isStaffManager } from '../../routes/roles'
 import { workflowError } from './workflowHelpers'
-import OpportunityHistory from './OpportunityHistory'
+import ActivityWorkspace from './ActivityWorkspace'
 
 const field = 'w-full rounded-sm border border-line bg-surface px-3 py-2.5 text-[13px] text-ink focus-visible:outline-2 focus-visible:outline-secondary'
 const label = 'flex min-w-0 flex-col gap-1.5 text-[13px] text-ink-soft'
@@ -31,13 +31,14 @@ function decimalKey(value: string): string | null {
 
 export default function AgentPipeline() {
   const { user } = useAuth()
+  const [searchParams] = useSearchParams()
   const manager = isStaffManager(user?.role)
   const [deals, setDeals] = useState<OpportunityResponse[]>([])
   const [stages, setStages] = useState<PipelineStageResponse[]>([])
   const [contacts, setContacts] = useState<ContactResponse[]>([])
   const [properties, setProperties] = useState<PropertyResponse[]>([])
   const [agents, setAgents] = useState<AssignedAgent[]>([])
-  const [activities, setActivities] = useState<ActivityResponse[]>([])
+  const [, setActivities] = useState<ActivityResponse[]>([])
   const [notes, setNotes] = useState<NoteResponse[]>([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState('')
@@ -46,12 +47,12 @@ export default function AgentPipeline() {
   const [buyerId, setBuyerId] = useState('')
   const [propertyId, setPropertyId] = useState('')
   const [agentId, setAgentId] = useState('')
-  const [selectedId, setSelectedId] = useState<number | null>(null)
+  const [selectedId, setSelectedId] = useState<number | null>(() => Number(searchParams.get('opportunity')) || null)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [refreshError, setRefreshError] = useState('')
   const [editingOffer, setEditingOffer] = useState<number | null>(null)
-  const [viewingPrompt, setViewingPrompt] = useState<number | null>(null)
+  const [, setViewingPrompt] = useState<number | null>(null)
   const [outcomeForm, setOutcomeForm] = useState<{ id: number; kind: 'won' | 'lost' } | null>(null)
   const [editingRate, setEditingRate] = useState<number | null>(null)
   const [finalPriceError, setFinalPriceError] = useState('')
@@ -189,21 +190,6 @@ export default function AgentPipeline() {
     })
   }
 
-  function addActivity(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    if (!selected || !user || manager) return
-    const form = event.currentTarget, data = new FormData(form)
-    void mutate(async () => {
-      const row = await activitiesService.create({ type: String(data.get('type')), subject: String(data.get('subject')).trim(), details: String(data.get('details')).trim() || null,
-        contactId: selected.buyerContactId, opportunityId: selected.id, propertyId: selected.propertyId, userId: user.id,
-        completedAt: new Date(String(data.get('completedAt'))).toISOString(), scheduledAt: null })
-      setActivities(current => [row, ...current]); form.reset()
-      const currentStage = stages.find(stage => stage.id === selected.stageId)
-      const viewing = stages.find(stage => stage.code === 'VIEWING')
-      if (row.type === 'Viewing' && row.completedAt && selected.status === 'Open' && viewing && currentStage && currentStage.sortOrder < viewing.sortOrder) setViewingPrompt(selected.id)
-    })
-  }
-
   function addNote(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (!selected || !user) return
@@ -262,10 +248,7 @@ export default function AgentPipeline() {
             {manager && editingRate === selected.id && <form key={`rate-${selected.id}`} onSubmit={saveCommissionRate} className="space-y-3 rounded-sm border border-line p-3"><label className={label}>Commission rate (decimal)<input name="commissionRate" type="number" required min="0" max="1" step="0.000001" defaultValue={selected.commissionRate} disabled={saving} className={field} /><span className="text-[11px]">Use a decimal fraction, for example 0.03.</span></label><div className="flex flex-wrap gap-2"><button disabled={saving} className={`${button} border-secondary bg-secondary text-on-secondary`}>Save commission rate</button><button type="button" disabled={saving} onClick={() => setEditingRate(null)} className={`${button} border-line`}>Cancel commission edit</button></div></form>}
           </div>}
           {selected.status === 'Open' && <div className="mb-5">{editingOffer === selected.id ? <form key={`offer-${selected.id}`} onSubmit={saveOffer} className="space-y-3"><label className={label}>Offer amount (₱)<input name="offerAmount" type="number" min="0.01" max="9999999999999999" step="0.01" required={(stages.find(stage => stage.id === selected.stageId)?.sortOrder ?? 1) >= 3} defaultValue={selected.offerAmount ?? ''} disabled={saving} className={field} /></label><div className="flex flex-wrap gap-2"><button disabled={saving} className={`${button} border-secondary bg-secondary text-on-secondary`}>Save offer</button><button type="button" disabled={saving} onClick={() => setEditingOffer(null)} className={`${button} border-line`}>Cancel offer edit</button></div></form> : <button type="button" disabled={saving} onClick={() => setEditingOffer(selected.id)} className={`${button} border-line text-secondary`}>Edit offer</button>}</div>}
-          {viewingPrompt === selected.id && selected.status === 'Open' && stages.find(stage => stage.id === selected.stageId)?.code === 'INQUIRY' && <div role="region" aria-label="Viewing progression" className="mb-5 rounded-sm border border-line p-3"><p className="text-[13px]">Viewing completed. Move this opportunity to Viewing?</p><div className="mt-3 flex flex-wrap gap-2"><button type="button" disabled={saving} onClick={() => { const viewing = stages.find(stage => stage.code === 'VIEWING'); if (viewing) changeStage(selected, viewing.id) }} className={`${button} border-secondary bg-secondary text-on-secondary`}>Move to Viewing</button><button type="button" disabled={saving} onClick={() => setViewingPrompt(null)} className={`${button} border-line`}>Keep current stage</button></div></div>}
-          <h2 className="mb-3 text-[14px] font-semibold">Activity history</h2><OpportunityHistory activities={activities.filter(activity => activity.opportunityId === selected.id)} stages={stages} />
-          {!manager && selected.status === 'Open' ? <form key={`activity-${selected.id}`} onSubmit={addActivity} className="space-y-3"><fieldset disabled={saving} className="space-y-3 border-0"><label className={label}>Activity type<select name="type" className={field}>{['Call', 'Email', 'Meeting', 'Viewing', 'Task'].map(type => <option key={type}>{type}</option>)}</select></label><label className={label}>Subject<input name="subject" required maxLength={200} className={field} /></label><label className={label}>Details<textarea name="details" className={field} /></label><label className={label}>Completed at<input name="completedAt" type="datetime-local" required className={field} /></label></fieldset><button disabled={saving} className={`${button} border-secondary bg-secondary text-on-secondary`}>Log activity</button></form>
-            : <p className="text-[13px] text-ink-soft">Use Contacts → Activities to schedule qualification work for an Agent.</p>}
+          <ActivityWorkspace key={String(selected.id) + '-' + selected.status + '-' + selected.stageId} target={{ contactId: selected.buyerContactId, opportunityId: selected.id, propertyId: selected.propertyId }} submitLabel="Log activity" onChanged={refreshWorkflow} />
         </div><div><h2 className="mb-3 text-[14px] font-semibold">Notes</h2><ul className="mb-4 space-y-3 text-[13px]">{notes.filter(note => note.entityType === 'Opportunity' && note.entityId === selected.id).map(note => <li key={note.id} className="whitespace-pre-wrap wrap-anywhere">{note.body}<span className="block text-[12px] text-ink-soft">{note.author?.fullName}</span></li>)}</ul><form key={`note-${selected.id}`} onSubmit={addNote} className="space-y-3"><label className={label}>New note<textarea name="body" required disabled={saving} className={`${field} min-h-24`} /></label><button disabled={saving} className={`${button} border-secondary bg-secondary text-on-secondary`}>Add note</button></form></div>
       </div></Panel></div>}
     </>}

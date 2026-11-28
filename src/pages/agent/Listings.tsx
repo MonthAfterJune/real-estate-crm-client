@@ -9,6 +9,7 @@ import StatusPill from '../../components/StatusPill'
 import AddPropertyForm from './AddPropertyForm'
 import { useAuth } from '../../auth/useAuth'
 import { isStaffManager } from '../../routes/roles'
+import ActivityWorkspace from './ActivityWorkspace'
 
 type ListingStatus = 'draft' | 'available' | 'reserved' | 'sold' | 'withdrawn'
 
@@ -63,6 +64,7 @@ export default function AgentListings() {
   }, [retry])
   const [addingProperty, setAddingProperty] = useState(false)
   const [editingProperty, setEditingProperty] = useState<PropertyResponse | undefined>()
+  const [activityProperty, setActivityProperty] = useState<PropertyResponse | null>(null)
   const [search, setSearch] = useState('')
   const [status, setStatus] = useState('all')
   const query = search.trim().toLowerCase()
@@ -224,7 +226,8 @@ export default function AgentListings() {
                   <td className="px-4.5 py-3"><StatusPill status={listing.status} /></td>
                   <td className="px-4.5 py-3">{(isStaffManager(user?.role) || listing.source.listingAgentId === user?.id) && ['Draft', 'Available', 'Withdrawn'].includes(listing.source.status)
                     ? <button type="button" aria-label={`Edit ${listing.property}`} onClick={() => setEditingProperty(listing.source)} className="cursor-pointer border-0 bg-transparent p-0 text-secondary underline">Edit</button>
-                    : <span className="text-[12px] text-ink-soft">{listing.source.status === 'Reserved' ? 'Release the reservation before withdrawing.' : 'Read-only'}</span>}</td>
+                    : <span className="text-[12px] text-ink-soft">{listing.source.status === 'Reserved' ? 'Release the reservation before withdrawing.' : 'Read-only'}</span>}
+                    {listing.source.sellerContact ? <button type="button" aria-label={`Activities ${listing.property}`} onClick={() => setActivityProperty(listing.source)} className="ml-3 text-secondary underline">Activities</button> : <span className="mt-2 block text-[12px] text-ink-soft">Seller contact is private; property activities unavailable.</span>}</td>
                 </tr>
               ))}
             </tbody>
@@ -238,6 +241,7 @@ export default function AgentListings() {
           </div>
         )}
       </Panel>
+      {activityProperty && <div className="mt-5"><Panel title={`Activities · ${activityProperty.address}`}><div className="space-y-4 p-5"><button type="button" onClick={() => setActivityProperty(null)} className="text-[13px] text-secondary underline">Close activities</button><ActivityWorkspace key={activityProperty.id} target={{ contactId: activityProperty.sellerContactId, propertyId: activityProperty.id }} /></div></Panel></div>}
     </div>
   )
 }
